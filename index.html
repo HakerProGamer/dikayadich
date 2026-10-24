@@ -1,0 +1,93 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Дикий берег</title><link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#10252a"><link rel="icon" href="icon-192.png">
+<style>
+:root{--bg:#e8eeed;--ink:#10252a;--mut:#566b6f;--card:#fff;--do:#2d5b8f;--po:#2a7a50;--bad:#a63a2e;--line:#c9d6d4;--on:#fff}
+@media(prefers-color-scheme:dark){:root{--bg:#0e1a1d;--ink:#e6efee;--mut:#8ea3a6;--card:#172629;--do:#6aa0d8;--po:#5cc08a;--bad:#e5786b;--line:#2a3e42;--on:#0e1a1d}}
+*{box-sizing:border-box}body{margin:0;font:17px/1.4 system-ui,sans-serif;background:var(--bg);color:var(--ink);padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+main{max-width:560px;margin:0 auto;padding:16px}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+h1{font-size:24px;margin:0;letter-spacing:.2px}h2{margin:0 0 12px;font-size:22px}
+button,input,textarea{font:inherit;color:inherit}
+button{border:0;border-radius:12px;padding:12px 16px;background:var(--card);border:1px solid var(--line);cursor:pointer}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:3px solid var(--do);outline-offset:2px}
+.big{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:8px 0 20px}
+.big button{border:0;color:var(--on);font-size:30px;font-weight:700;padding:34px 8px;border-radius:18px}
+.big .do{background:var(--do)}.big .po{background:var(--po)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}.row>*{flex:1}
+input[type=date],input[type=text],input[type=url],textarea{width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--card)}
+textarea{min-height:110px;resize:vertical}label{display:block;margin:12px 0 4px;color:var(--mut)}
+.rec{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;display:flex;gap:12px;align-items:center}
+.tag{font-weight:700;border-radius:8px;padding:4px 10px;color:var(--on);min-width:76px;text-align:center}.tag.do{background:var(--do)}.tag.po{background:var(--po)}
+.rec .info{flex:1;min-width:0}.rec small{color:var(--mut);display:block}.bad{color:var(--bad)!important}
+.th{display:flex;flex-wrap:wrap;gap:8px}.th div{position:relative;width:84px;height:84px;border-radius:10px;overflow:hidden;background:var(--line);display:grid;place-items:center;font-size:12px;text-align:center}
+.th img{width:100%;height:100%;object-fit:cover}.th b{position:absolute;top:2px;right:2px;background:#000a;color:#fff;border-radius:50%;width:24px;height:24px;line-height:24px;text-align:center;cursor:pointer}
+.save{background:var(--ink);color:var(--bg);border:0;font-weight:700}.mut{color:var(--mut)}#st{font-size:14px;color:var(--mut);margin:0 0 12px}
+</style></head><body><main>
+<header><h1>Дикий берег</h1><div><button id="bs" title="Отправить на Диск">⟳</button> <button id="bg" title="Настройки">⚙</button></div></header>
+<p id="st"></p>
+<section id="home"><div class="big"><button class="do" data-k="ДО">ДО</button><button class="po" data-k="ПОСЛЕ">ПОСЛЕ</button></div><div id="list"></div></section>
+<section id="form" hidden><h2 id="ft"></h2>
+<label for="dt">Дата</label><input type="date" id="dt">
+<div class="row"><button id="bp">📷 Фото</button><button id="bv">🎥 Видео</button><button id="bf">📁 Файлы</button></div>
+<div class="th" id="th"></div>
+<label for="nt">Примечание</label><textarea id="nt"></textarea>
+<div class="row"><button id="cx">Отмена</button><button class="save" id="sv">Сохранить</button></div></section>
+<section id="set" hidden><h2>Настройки Google Диска</h2>
+<label for="u">Ссылка веб-приложения (оканчивается на /exec)</label><input type="url" id="u">
+<label for="k">Ключ (тот же, что в Code.gs)</label><input type="text" id="k" autocomplete="off">
+<div class="row"><button id="t">Проверить связь</button><button class="save" id="ss">Сохранить</button></div><p id="tr" class="mut"></p></section>
+<input type="file" id="i1" accept="image/*" capture="environment" hidden><input type="file" id="i2" accept="video/*" capture="environment" hidden><input type="file" id="i3" accept="image/*,video/*,.txt,.pdf" multiple hidden>
+</main><script>
+const $=s=>document.querySelector(s),pad=n=>String(n).padStart(2,'0');
+const DB=new Promise((ok,er)=>{const r=indexedDB.open('akt',1);r.onupgradeneeded=()=>r.result.createObjectStore('rec',{keyPath:'id'});r.onsuccess=()=>ok(r.result);r.onerror=()=>er(r.error)});
+const tx=async(m,f)=>{const db=await DB;return new Promise((ok,er)=>{const t=db.transaction('rec',m),q=f(t.objectStore('rec'));t.oncomplete=()=>ok(q&&q.result);t.onerror=()=>er(t.error)})};
+const all=()=>tx('readonly',s=>s.getAll()),put=r=>tx('readwrite',s=>s.put(r)),del=id=>tx('readwrite',s=>s.delete(id));
+const cfg=()=>({url:localStorage.u||'',key:localStorage.k||''}),fmt=d=>d.split('-').reverse().join('.');
+const show=id=>{for(const s of ['home','form','set'])$('#'+s).hidden=s!==id};
+let cur=null;
+function open(k){const n=new Date();cur={k,files:[]};$('#ft').textContent=k==='ДО'?'ДО — перед заселением':'ПОСЛЕ — после выезда';
+ $('#dt').value=`${n.getFullYear()}-${pad(n.getMonth()+1)}-${pad(n.getDate())}`;$('#nt').value='';thumbs();show('form')}
+function thumbs(){const t=$('#th');t.innerHTML='';cur.files.forEach((f,i)=>{const d=document.createElement('div');
+ if(f.type.startsWith('image/')){const im=new Image();im.src=URL.createObjectURL(f);d.append(im)}else d.textContent=(f.type.startsWith('video/')?'🎥 ':'📄 ')+f.name.slice(0,18);
+ const x=document.createElement('b');x.textContent='×';x.onclick=()=>{cur.files.splice(i,1);thumbs()};d.append(x);t.append(d)})}
+for(const [b,i] of [['bp','i1'],['bv','i2'],['bf','i3']]){$('#'+b).onclick=()=>$('#'+i).click();$('#'+i).onchange=e=>{cur.files.push(...e.target.files);e.target.value='';thumbs()}}
+document.querySelectorAll('.big button').forEach(b=>b.onclick=()=>open(b.dataset.k));
+$('#cx').onclick=()=>show('home');
+$('#sv').onclick=async()=>{const n=new Date(),note=$('#nt').value.trim();
+ if(!$('#dt').value)return alert('Укажите дату');if(!cur.files.length&&!note)return alert('Добавьте файлы или примечание');
+ const time=pad(n.getHours())+pad(n.getMinutes())+pad(n.getSeconds());
+ await put({id:Date.now(),kind:cur.k,date:$('#dt').value,time,note,noteDone:!note,synced:false,err:'',
+  files:cur.files.map(f=>({name:time+'_'+f.name,blob:f,done:false}))});
+ show('home');render();sync()};
+async function render(){const l=$('#list'),rs=(await all()).sort((a,b)=>b.id-a.id);l.innerHTML='';
+ if(!rs.length)l.innerHTML='<p class="mut">Нажмите «ДО» или «ПОСЛЕ», чтобы добавить запись.</p>';
+ for(const r of rs){const d=document.createElement('div');d.className='rec';
+  const st=r.synced?'на Диске ✓':r.err?'ошибка: '+r.err:'ждёт отправки';
+  d.innerHTML=`<span class="tag ${r.kind==='ДО'?'do':'po'}">${r.kind}</span><div class="info"><b>${fmt(r.date)}</b><small>${r.files.length} файл. ${r.note?'· есть примечание':''}</small><small class="${r.err&&!r.synced?'bad':''}"></small></div><button>🗑</button>`;
+  d.querySelector('small:last-child').textContent=st;
+  d.querySelector('button').onclick=async()=>{if(confirm(r.synced?'Удалить запись из телефона? На Диске она останется.':'Запись ещё НЕ отправлена на Диск. Удалить?')){await del(r.id);render()}};
+  l.append(d)}
+ const w=rs.filter(r=>!r.synced).length;$('#st').textContent=(navigator.onLine?'Сеть есть':'Нет сети')+(w?` · ждёт отправки: ${w}`:' · всё отправлено')}
+async function call(o){const c=cfg(),r=await fetch(c.url,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({...o,key:c.key,origin:location.origin})});
+ const j=await r.json();if(j.error)throw new Error(j.error);return j}
+async function upload(f,date,kind){const n=f.blob.size;if(!n)return;
+ const {url}=await call({action:'start',date,kind,name:f.name,mime:f.blob.type||'application/octet-stream'}),CH=2097152;
+ for(let s=0;s<n;s+=CH){const e=Math.min(s+CH,n);
+  const r=await fetch(url,{method:'PUT',headers:{'Content-Range':`bytes ${s}-${e-1}/${n}`},body:f.blob.slice(s,e)});
+  if(r.status!==308&&!r.ok)throw new Error('Диск ответил '+r.status)}}
+let busy=false;
+async function sync(){const c=cfg();if(busy||!navigator.onLine||!c.url||!c.key)return;busy=true;
+ for(const r of (await all()).filter(r=>!r.synced)){try{const d=fmt(r.date);
+  if(!r.noteDone){await call({action:'note',date:d,kind:r.kind,name:'примечание_'+r.time+'.txt',text:r.note});r.noteDone=true;await put(r)}
+  for(const f of r.files)if(!f.done){await upload(f,d,r.kind);f.done=true;await put(r)}
+  r.synced=true;r.err='';await put(r)}catch(e){r.err=e.message||String(e);await put(r)}
+  render()}
+ busy=false;render()}
+$('#bs').onclick=sync;$('#bg').onclick=()=>{$('#u').value=cfg().url;$('#k').value=cfg().key;$('#tr').textContent='';show('set')};
+$('#ss').onclick=()=>{localStorage.u=$('#u').value.trim();localStorage.k=$('#k').value.trim();show('home');sync()};
+$('#t').onclick=async()=>{localStorage.u=$('#u').value.trim();localStorage.k=$('#k').value.trim();$('#tr').textContent='Проверяю…';
+ try{await call({action:'ping'});$('#tr').textContent='Связь с Диском есть ✓'}catch(e){$('#tr').textContent='Не получилось: '+e.message}};
+addEventListener('online',()=>{render();sync()});addEventListener('offline',render);
+if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js');
+if(navigator.storage&&navigator.storage.persist)navigator.storage.persist();
+render();sync();
+</script></body></html>
